@@ -8,7 +8,7 @@
 import { betterAuth } from "better-auth";
 import { username } from "better-auth/plugins";
 import { Database } from "bun:sqlite";
-import { DB_PATH, AUTH_USERNAME, AUTH_PASSWORD, AUTH_ENABLED, BETTER_AUTH_SECRET } from "../config";
+import { DB_PATH, AUTH_USERNAME, AUTH_PASSWORD, AUTH_ENABLED, BETTER_AUTH_SECRET, BETTER_AUTH_URL } from "../config";
 
 // Initialize database (bun:sqlite for runtime performance)
 const db = new Database(DB_PATH);
@@ -21,6 +21,7 @@ if (process.env.NODE_ENV === "production" && !BETTER_AUTH_SECRET) {
 export const auth = betterAuth({
   database: db,
   secret: BETTER_AUTH_SECRET || undefined,
+  baseURL: BETTER_AUTH_URL || undefined,
   emailAndPassword: {
     enabled: true,
   },

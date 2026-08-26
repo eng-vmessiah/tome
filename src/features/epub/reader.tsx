@@ -100,7 +100,7 @@ export function EpubReaderPage({
               <p>Are you sure you want to remove this book from your library?</p>
               <div class="delete-actions">
                 <button class="btn btn-outline delete-cancel">Cancel</button>
-                <form method="POST" action={`/epub/${book.id}/delete`} style="display: inline;">
+                <form method="POST" action={`/read/epub/${book.id}/delete`} style="display: inline;">
                   <button type="submit" class="btn delete-confirm">Delete</button>
                 </form>
               </div>

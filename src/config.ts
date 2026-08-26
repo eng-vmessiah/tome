@@ -19,6 +19,11 @@ export const AUTH_PASSWORD = process.env.AUTH_PASSWORD || "";
 export const AUTH_ENABLED = !!(AUTH_USERNAME && AUTH_PASSWORD);
 export const BETTER_AUTH_SECRET = process.env.BETTER_AUTH_SECRET || "";
 
+// Public base URL for auth callbacks/invite links (set behind a reverse proxy).
+// When unset, Better Auth derives the origin from the incoming request, which
+// breaks callback/invite URLs behind a proxy (see BETTER_AUTH_URL).
+export const BETTER_AUTH_URL = process.env.BETTER_AUTH_URL || "";
+
 // Cache TTLs (in seconds)
 export const CACHE_TTL = {
   DEFAULT: 5 * 60,               // 5 minutes (generic cache)
