@@ -30,7 +30,12 @@ export async function handleApiRoute(
     if (method === "GET") {
       if (!source.getChapter) return json({ error: "Chapter not found" }, 404);
       try {
-        const chapter = await source.getChapter(fictionRef, chapterRef, userId);
+        // The GET is the reader's PRELOAD of the next chapter. Passing no userId
+        // makes the source fetch anonymously, so Royal Road does NOT mark the
+        // chapter read (RR records read state on an authenticated chapter GET).
+        // Marking read happens only via the POST below (reportProgress) when the
+        // user actually navigates to the chapter.
+        const chapter = await source.getChapter(fictionRef, chapterRef);
         if (!chapter) return json({ error: "Chapter not found" }, 404);
         return json({
           ref: chapter.ref ?? chapterRef,

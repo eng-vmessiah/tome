@@ -458,6 +458,10 @@
       // Stabilization delay: give e-ink time to complete refresh cycle 
       // before rendering new content to prevent light font weights
       setTimeout(function() {
+        // Clear the inline bg so the active theme class (dark/sepia) wins again.
+        // Leaving #fff here overrides body[.dark-mode]'s #121212/#000 and shows
+        // grey letters on white after a chapter turn.
+        document.body.style.backgroundColor = '';
         if (callback) callback();
       }, 100);
     }, 100);
