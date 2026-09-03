@@ -203,11 +203,55 @@ export function getEnabledSources(userId: string): Source[] {
 /**
  * Resolve a source for a request. Returns null when the name is unknown OR
  * the user disabled the source — routes treat null as 404.
+ *
+ * The returned source patches stale chapter nav: chapter rows cache their
+ * prev/next for 30 days, so a cached "latest chapter" keeps nextRef=null
+ * after a new chapter releases. Fiction rows refresh hourly, so when a
+ * chapter claims an edge (null prev/next) its nav is reconciled against the
+ * fiction's chapter list (usually a cheap cache hit). Only fills null refs —
+ * never overwrites real nav — and degrades to the chapter as-is on failure.
  */
 export function getSource(userId: string, name: string): Source | null {
   const source = getSourceByName(name);
   if (!source) return null;
-  return isSourceEnabled(userId, name) ? source : null;
+  if (!isSourceEnabled(userId, name)) return null;
+  if (!source.getChapter || !source.getFiction) return source;
+  const getChapter = source.getChapter.bind(source);
+  return {
+    ...source,
+    getChapter: (ref, chapterRef, uid) =>
+      getChapter(ref, chapterRef, uid).then((chapter) =>
+        chapter ? patchEdgeNav(source, uid ?? userId, ref, chapterRef, chapter) : chapter
+      ),
+  };
+}
+
+async function patchEdgeNav(
+  source: Source,
+  userId: string,
+  fictionRef: string,
+  chapterRef: string,
+  chapter: ChapterContent
+): Promise<ChapterContent> {
+  if (chapter.prevRef && chapter.nextRef) return chapter;
+  let chapters: Fiction["chapters"];
+  try {
+    chapters = (await source.getFiction!(fictionRef, userId))?.chapters;
+  } catch {
+    return chapter;
+  }
+  if (!chapters?.length) return chapter;
+  const keys = new Set(
+    [chapterRef, chapter.ref, String(chapter.id), chapter.chapterSlug].filter(Boolean) as string[]
+  );
+  const idx = chapters.findIndex((c) => keys.has(String(c.id)) || (c.slug != null && keys.has(c.slug)));
+  if (idx < 0) return chapter;
+  // Stay in the same ref space the URL used (numeric id vs slug).
+  const bySlug = chapters[idx].slug != null && keys.has(chapters[idx].slug as string);
+  const refOf = (c: { id: number; slug?: string }) => (bySlug && c.slug ? c.slug : String(c.id));
+  if (!chapter.prevRef && idx > 0) chapter.prevRef = refOf(chapters[idx - 1]);
+  if (!chapter.nextRef && idx < chapters.length - 1) chapter.nextRef = refOf(chapters[idx + 1]);
+  return chapter;
 }
 
 /** First enabled source with the given capability, or null. */

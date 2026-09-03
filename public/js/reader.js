@@ -450,6 +450,12 @@
   // ============================================================
 
   function triggerEinkRefresh(callback) {
+    // The black-flash clear is an e-ink-only trick; on LCD it is just a
+    // 300ms flicker, so skip it unless the server flagged a Kindle UA.
+    if (!document.body.classList.contains('kindle')) {
+      if (callback) callback();
+      return;
+    }
     // Flash screen black briefly to clear e-ink ghosting
     document.body.style.backgroundColor = '#000';
     setTimeout(function() {
