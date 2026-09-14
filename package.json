@@ -36,7 +36,7 @@
     "better-auth": "^1.4.9",
     "jszip": "^3.10.1",
     "qrcode": "^1.5.4",
-    "tome-feature-watch": "github:eng-vmessiah/tome-feature-watch",
+    "tome-feature-watch": "github:eng-vmessiah/tome-feature-watch#a7efeb2ab266000d83f64017751aed82fd0e53be",
     "tome-source-asura": "github:nmessias/tome-source-asura#ffe66acd9f6f0cdee01a3b3bd4b8086bf4e05781"
   },
   "optionalDependencies": {

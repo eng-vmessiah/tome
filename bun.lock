@@ -8,10 +8,10 @@
         "@kitajs/html": "^4.2.11",
         "@kitajs/ts-html-plugin": "^4.1.3",
         "better-auth": "^1.4.9",
-        "tome-source-asura": "github:nmessias/tome-source-asura#ffe66acd9f6f0cdee01a3b3bd4b8086bf4e05781",
         "jszip": "^3.10.1",
         "qrcode": "^1.5.4",
         "tome-feature-watch": "github:eng-vmessiah/tome-feature-watch",
+        "tome-source-asura": "github:nmessias/tome-source-asura#ffe66acd9f6f0cdee01a3b3bd4b8086bf4e05781",
       },
       "devDependencies": {
         "@types/bun": "latest",
@@ -256,7 +256,7 @@
 
     "tome": ["tome@github:nmessias/tome#75dd269", { "dependencies": { "@kitajs/html": "^4.2.11", "@kitajs/ts-html-plugin": "^4.1.3", "better-auth": "^1.4.9", "better-sqlite3": "^12.5.0", "jszip": "^3.10.1", "qrcode": "^1.5.4" }, "optionalDependencies": { "playwright": "^1.40.0" } }, "nmessias-tome-75dd269", "sha512-8aYv4UJ7HGEsl65QI3ir0TYpfhywssVL40B0tmZJkZO9BcOcbGN9CPkh9/rULSC0oH54RYpz1Y+2CRrCfLr5rw=="],
 
-    "tome-feature-watch": ["tome-feature-watch@github:eng-vmessiah/tome-feature-watch#f8d8f71", { "dependencies": { "tome": "github:nmessias/tome" } }, "eng-vmessiah-tome-feature-watch-f8d8f71", "sha512-oZqwk4U66I3FbKt16UddKyDRiGTz7WkrxHvs+1NR8BW2+2gH1XO57ONFfryEezosm+520vuV4GOCWAGB59/H7g=="],
+    "tome-feature-watch": ["tome-feature-watch@github:eng-vmessiah/tome-feature-watch#a7efeb2ab266000d83f64017751aed82fd0e53be", { "dependencies": { "tome": "github:nmessias/tome" } }, "eng-vmessiah-tome-feature-watch-a7efeb2", "sha512-pKtPyvfPvfe3PHherl9kFLAMjEhArXzJh0q48QwA9T5YgNJFgSu80v72smEwb0aroqSa460+legEoBkIaXb0Cg=="],
 
     "tome-source-asura": ["tome-source-asura@github:nmessias/tome-source-asura#ffe66ac", { "dependencies": { "tome": "github:nmessias/tome" } }, "nmessias-tome-source-asura-ffe66ac", "sha512-uJ45V+twQAUbq3jzwDDO/Z+LxrvuPiZVMTS9e9A3Q9SN/gMXf0pdtH00a+HkOGS6aV5rIL7Q9OKa4VC2s/8a6g=="],
 
