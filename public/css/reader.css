@@ -208,6 +208,16 @@ body.kindle .reader-content {
   max-width: 100%;
 }
 
+/* Full-bleed panels: drop the column gutters (inline max-width included).
+   Bottom padding stays for nav clearance. */
+.reader-wrapper[data-source="asura"] .reader-content {
+  padding-left: 0;
+  padding-right: 0;
+  width: 100%;
+  margin: 0;
+  max-width: none !important;
+}
+
 .reader-content::-webkit-scrollbar {
   display: none;
 }
