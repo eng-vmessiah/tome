@@ -881,11 +881,13 @@
     }
     
     // WATCH REMOTE (tome-feature-watch) — this page holds a reader WS so the
-    // watch companion's POSTed actions reach it. Token from sessionStorage
+    // watch companion's POSTed actions reach it. Token from localStorage
     // (stored by /watch/pair after the QR ceremony, or typed in settings).
+    // Pair-once: the token persists across tabs/restarts; the server keeps
+    // the session in sqlite with sliding expiry. Unpair burns both ends.
     var WATCH_KEY = 'tome_watch_token';
     var watchWs = null;
-    function getWatchToken() { try { return sessionStorage.getItem(WATCH_KEY); } catch (e) { return null; } }
+    function getWatchToken() { try { return localStorage.getItem(WATCH_KEY); } catch (e) { return null; } }
     function setWatchStatus(t) { var el = document.getElementById('watch-status'); if (el) el.textContent = t; }
     function showWatchIcon(show) { var icon = document.getElementById('remote-icon'); if (icon) icon.style.display = show ? 'inline' : 'none'; }
     function routeWatchAction(a) {
@@ -919,13 +921,22 @@
       var input = document.getElementById('watch-token-input');
       var token = input ? input.value.replace(/[^a-z0-9]/gi, '').toLowerCase() : '';
       if (!token) { setWatchStatus('Enter the code from your watch'); return; }
-      try { sessionStorage.setItem(WATCH_KEY, token); } catch (e) {}
+      try { localStorage.setItem(WATCH_KEY, token); } catch (e) {}
       setWatchStatus('Connecting...');
       connectWatch(token);
     }
     function unpairWatch() {
+      var token = getWatchToken();
       if (watchWs) { try { watchWs.close(); } catch (e) {} watchWs = null; }
-      try { sessionStorage.removeItem(WATCH_KEY); } catch (e) {}
+      try { localStorage.removeItem(WATCH_KEY); } catch (e) {}
+      if (token) {
+        // Fire-and-forget server revoke (logged-in owner or bearer both work).
+        try {
+          var xhr = new XMLHttpRequest();
+          xhr.open('DELETE', '/api/watch/' + encodeURIComponent(token), true);
+          xhr.send();
+        } catch (e) {}
+      }
       showWatchIcon(false);
       setWatchStatus('');
       updateWatchUI();

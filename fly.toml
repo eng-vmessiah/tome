@@ -8,7 +8,7 @@ dockerfile = "Dockerfile"
 NODE_ENV = "production"
 PORT = "3000"
 # Source plugins to load at startup (must also be installed in the image)
-TOME_PLUGINS = "tome-source-royalroad,tome-source-freewebnovel"
+TOME_PLUGINS = "tome-source-royalroad,tome-source-freewebnovel,tome-feature-watch,tome-source-asura"
 
 [http_service]
 auto_start_machines = true
