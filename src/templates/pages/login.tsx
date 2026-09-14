@@ -8,9 +8,11 @@ import { DEFAULT_READER_SETTINGS } from "../../config";
 export function LoginPage({
   settings = DEFAULT_READER_SETTINGS,
   error,
+  next,
 }: {
   settings?: ReaderSettings;
   error?: string;
+  next?: string;
 }): JSX.Element {
   const darkClass = settings.dark ? "dark-mode" : "";
 
@@ -39,6 +41,7 @@ export function LoginPage({
             )}
 
             <form method="POST" action="/login">
+              {next && <input type="hidden" name="next" value={next} />}
               <div class="form-group">
                 <label for="username">Username</label>
                 <input

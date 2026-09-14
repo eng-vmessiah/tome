@@ -880,11 +880,75 @@
       }, 50);
     }
     
+    // WATCH REMOTE (tome-feature-watch) — this page holds a reader WS so the
+    // watch companion's POSTed actions reach it. Token from sessionStorage
+    // (stored by /watch/pair after the QR ceremony, or typed in settings).
+    var WATCH_KEY = 'tome_watch_token';
+    var watchWs = null;
+    function getWatchToken() { try { return sessionStorage.getItem(WATCH_KEY); } catch (e) { return null; } }
+    function setWatchStatus(t) { var el = document.getElementById('watch-status'); if (el) el.textContent = t; }
+    function showWatchIcon(show) { var icon = document.getElementById('remote-icon'); if (icon) icon.style.display = show ? 'inline' : 'none'; }
+    function routeWatchAction(a) {
+      if (a === 'next' || a === 'scroll-down') nextPage();
+      else if (a === 'prev' || a === 'scroll-up') prevPage();
+    }
+    function updateWatchUI() {
+      var form = document.getElementById('watch-pair');
+      var pairBtn = document.getElementById('watch-pair-btn');
+      var unpairBtn = document.getElementById('watch-unpair-btn');
+      var connected = !!(watchWs && watchWs.readyState === WebSocket.OPEN);
+      var stored = !!getWatchToken();
+      if (form) form.style.display = (!connected && !stored) ? 'block' : 'none';
+      if (pairBtn) pairBtn.style.display = (!connected && !stored) ? '' : 'none';
+      if (unpairBtn) unpairBtn.style.display = (connected || stored) ? '' : 'none';
+      var input = document.getElementById('watch-token-input');
+      if (input && stored && !input.value) input.value = getWatchToken();
+    }
+    function connectWatch(token) {
+      if (watchWs) { try { watchWs.close(); } catch (e) {} watchWs = null; }
+      if (!token) return;
+      var scheme = window.location.protocol === 'https:' ? 'wss' : 'ws';
+      try {
+        watchWs = new WebSocket(scheme + '://' + window.location.host + '/ws/watch/' + encodeURIComponent(token) + '?role=reader');
+      } catch (e) { setWatchStatus('Connection failed'); updateWatchUI(); return; }
+      watchWs.onopen = function() { setWatchStatus('Watch connected'); showWatchIcon(true); updateWatchUI(); };
+      watchWs.onmessage = function(e) { try { var d = JSON.parse(e.data); if (d && d.action) routeWatchAction(d.action); } catch (err) {} };
+      watchWs.onclose = function() { watchWs = null; showWatchIcon(false); setWatchStatus('Watch disconnected'); updateWatchUI(); };
+    }
+    function pairWatch() {
+      var input = document.getElementById('watch-token-input');
+      var token = input ? input.value.replace(/[^a-z0-9]/gi, '').toLowerCase() : '';
+      if (!token) { setWatchStatus('Enter the code from your watch'); return; }
+      try { sessionStorage.setItem(WATCH_KEY, token); } catch (e) {}
+      setWatchStatus('Connecting...');
+      connectWatch(token);
+    }
+    function unpairWatch() {
+      if (watchWs) { try { watchWs.close(); } catch (e) {} watchWs = null; }
+      try { sessionStorage.removeItem(WATCH_KEY); } catch (e) {}
+      showWatchIcon(false);
+      setWatchStatus('');
+      updateWatchUI();
+    }
+
     TomeRemote.init({
       indicator: function() { return S.els.indicator; },
       nextPage: nextPage,
       prevPage: prevPage
     });
+
+    var watchPairBtn = document.getElementById('watch-pair-btn');
+    if (watchPairBtn) watchPairBtn.onclick = function() {
+      var f = document.getElementById('watch-pair');
+      if (f) f.style.display = f.style.display === 'none' ? 'block' : 'none';
+    };
+    var watchConnectBtn = document.getElementById('watch-connect-btn');
+    if (watchConnectBtn) watchConnectBtn.onclick = pairWatch;
+    var watchUnpairBtn = document.getElementById('watch-unpair-btn');
+    if (watchUnpairBtn) watchUnpairBtn.onclick = unpairWatch;
+    var savedWatch = getWatchToken();
+    if (savedWatch) { setWatchStatus('Reconnecting watch...'); connectWatch(savedWatch); }
+    updateWatchUI();
   }
 
   // ============================================================

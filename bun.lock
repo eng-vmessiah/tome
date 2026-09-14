@@ -8,8 +8,10 @@
         "@kitajs/html": "^4.2.11",
         "@kitajs/ts-html-plugin": "^4.1.3",
         "better-auth": "^1.4.9",
+        "tome-source-asura": "github:nmessias/tome-source-asura#ffe66acd9f6f0cdee01a3b3bd4b8086bf4e05781",
         "jszip": "^3.10.1",
         "qrcode": "^1.5.4",
+        "tome-feature-watch": "github:eng-vmessiah/tome-feature-watch",
       },
       "devDependencies": {
         "@types/bun": "latest",
@@ -254,6 +256,10 @@
 
     "tome": ["tome@github:nmessias/tome#75dd269", { "dependencies": { "@kitajs/html": "^4.2.11", "@kitajs/ts-html-plugin": "^4.1.3", "better-auth": "^1.4.9", "better-sqlite3": "^12.5.0", "jszip": "^3.10.1", "qrcode": "^1.5.4" }, "optionalDependencies": { "playwright": "^1.40.0" } }, "nmessias-tome-75dd269", "sha512-8aYv4UJ7HGEsl65QI3ir0TYpfhywssVL40B0tmZJkZO9BcOcbGN9CPkh9/rULSC0oH54RYpz1Y+2CRrCfLr5rw=="],
 
+    "tome-feature-watch": ["tome-feature-watch@github:eng-vmessiah/tome-feature-watch#f8d8f71", { "dependencies": { "tome": "github:nmessias/tome" } }, "eng-vmessiah-tome-feature-watch-f8d8f71", "sha512-oZqwk4U66I3FbKt16UddKyDRiGTz7WkrxHvs+1NR8BW2+2gH1XO57ONFfryEezosm+520vuV4GOCWAGB59/H7g=="],
+
+    "tome-source-asura": ["tome-source-asura@github:nmessias/tome-source-asura#ffe66ac", { "dependencies": { "tome": "github:nmessias/tome" } }, "nmessias-tome-source-asura-ffe66ac", "sha512-uJ45V+twQAUbq3jzwDDO/Z+LxrvuPiZVMTS9e9A3Q9SN/gMXf0pdtH00a+HkOGS6aV5rIL7Q9OKa4VC2s/8a6g=="],
+
     "tome-source-freewebnovel": ["tome-source-freewebnovel@github:nmessias/tome-source-freewebnovel#30151d3", { "dependencies": { "linkedom": "^0.16.0", "tome": "github:nmessias/tome" } }, "nmessias-tome-source-freewebnovel-30151d3", "sha512-NXA9SPJ3iF44HjN9avBQeUs/ay8Qa5DJioOu7pBQZqcxsTOWxjrgHXKsJT+9TuE36pgXzR9BFrRXtSV69iXVBg=="],
 
     "tome-source-royalroad": ["tome-source-royalroad@github:nmessias/tome-source-royalroad#afcdf87", { "dependencies": { "linkedom": "^0.16.0", "tome": "github:nmessias/tome" }, "optionalDependencies": { "playwright": "^1.40.0" } }, "nmessias-tome-source-royalroad-afcdf87", "sha512-pZaejGZ2kMmqc7oBkZnlDXYI2otweOH2qwnQvkViYrfT9m3BMmA2uASEsxz+2X/h4TUpSbv8y7KkHI9aA/1M9w=="],
@@ -293,6 +299,10 @@
     "qrcode/yargs": ["yargs@15.4.1", "", { "dependencies": { "cliui": "^6.0.0", "decamelize": "^1.2.0", "find-up": "^4.1.0", "get-caller-file": "^2.0.1", "require-directory": "^2.1.1", "require-main-filename": "^2.0.0", "set-blocking": "^2.0.0", "string-width": "^4.2.0", "which-module": "^2.0.0", "y18n": "^4.0.0", "yargs-parser": "^18.1.2" } }, "sha512-aePbxDmcYW++PaqBsJ+HYUFwCdv4LVvdnhBy78E57PIor8/OVvhMrADFFEDh8DHDFRv/O9i3lPhsENjO7QX0+A=="],
 
     "tar-stream/readable-stream": ["readable-stream@3.6.2", "", { "dependencies": { "inherits": "^2.0.3", "string_decoder": "^1.1.1", "util-deprecate": "^1.0.1" } }, "sha512-9u/sniCrY3D5WdsERHzHE4G2YCXqoG5FTHUiCC4SIbr6XcLZBY05ya9EKjYek9O5xOAwjGq+1JdGBAS7Q9ScoA=="],
+
+    "tome-feature-watch/tome": ["tome@github:nmessias/tome#810ca18", { "dependencies": { "@kitajs/html": "^4.2.11", "@kitajs/ts-html-plugin": "^4.1.3", "better-auth": "^1.4.9", "jszip": "^3.10.1", "qrcode": "^1.5.4" }, "optionalDependencies": { "playwright": "^1.40.0" } }, "nmessias-tome-810ca18", "sha512-wFTCuKEYw8vQvgw993gnqh+sKuuUFKceu7kq0Yu1KDKTsj0V0Td91fOAaOQz8YBX9cK8usRU+VMz1ncYlYEJiA=="],
+
+    "tome-source-asura/tome": ["tome@github:nmessias/tome#810ca18", { "dependencies": { "@kitajs/html": "^4.2.11", "@kitajs/ts-html-plugin": "^4.1.3", "better-auth": "^1.4.9", "jszip": "^3.10.1", "qrcode": "^1.5.4" }, "optionalDependencies": { "playwright": "^1.40.0" } }, "nmessias-tome-810ca18", "sha512-wFTCuKEYw8vQvgw993gnqh+sKuuUFKceu7kq0Yu1KDKTsj0V0Td91fOAaOQz8YBX9cK8usRU+VMz1ncYlYEJiA=="],
 
     "tome-source-royalroad/tome": ["tome@github:nmessias/tome#7e77378", { "dependencies": { "@kitajs/html": "^4.2.11", "@kitajs/ts-html-plugin": "^4.1.3", "better-auth": "^1.4.9", "jszip": "^3.10.1", "qrcode": "^1.5.4" }, "optionalDependencies": { "playwright": "^1.40.0" } }, "nmessias-tome-7e77378", "sha512-2+zygulXb+IBc5FpmMy6l5nhaye/7NanxEHtYEt1I8FdZA/59l9L+8wqMK6IPhePe+o/MXBl1C1gsV0omvVaBQ=="],
 

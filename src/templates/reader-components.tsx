@@ -176,6 +176,32 @@ export function RemoteControlSection(): JSX.Element {
 }
 
 /**
+ * Watch pairing UI — token entry + status for the Galaxy Watch companion.
+ * The token itself is stored by /watch/pair (QR ceremony) or typed here;
+ * reader.js holds the reader-side WS. Session storage = tab lifetime.
+ */
+export function WatchPairSection(): JSX.Element {
+  return (
+    <>
+      <div class="settings-row">
+        <label>Watch Remote</label>
+        <div class="remote-controls">
+          <button class="remote-btn" id="watch-pair-btn">Pair</button>
+          <button class="remote-btn remote-disable" id="watch-unpair-btn" style="display: none;">Unpair</button>
+        </div>
+      </div>
+
+      <div class="watch-pair" id="watch-pair" style="display: none;">
+        <p style="margin-bottom: 10px; font-size: 14px;">Enter the code shown on your watch:</p>
+        <input id="watch-token-input" inputmode="latin" autocomplete="off" autocapitalize="off" spellcheck={false} style="font-size: 16px; padding: 8px; width: 12em; text-align: center;" />
+        <button class="remote-btn" id="watch-connect-btn">Connect</button>
+        <p class="remote-status" id="watch-status"></p>
+      </div>
+    </>
+  );
+}
+
+/**
  * Settings modal with font size and remote control.
  * Pass additional settings rows as children — they render between
  * the font size row and the remote control section.
@@ -206,6 +232,7 @@ export function SettingsModal({
         <WidthSelector display={(readingWidth || 650) + "px"} />
         {children}
         <RemoteControlSection />
+        <WatchPairSection />
         <button class="settings-close">Close</button>
       </div>
     </div>

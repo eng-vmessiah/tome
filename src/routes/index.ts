@@ -26,6 +26,7 @@ const PUBLIC_PATHS = [
   "/api/ws-test",
   "/remote",
   "/api/remote",
+  "/api/watch",
   "/invite",
   "/api/invitations/qr",
 ];
@@ -35,6 +36,12 @@ const PUBLIC_PATHS = [
  */
 function isPublicPath(path: string): boolean {
   return PUBLIC_PATHS.some((p) => path === p || path.startsWith(p + "/"));
+}
+
+/** Post-login return target: same-origin path only (blocks //evil open redirects). */
+function safeNext(value: string | null): string | undefined {
+  if (value && value.startsWith("/") && !value.startsWith("//")) return value;
+  return undefined;
 }
 
 /**
@@ -71,7 +78,8 @@ async function routeRequest(req: Request): Promise<Response> {
       const settings = parseReaderSettings(req.headers.get("cookie"));
       settings.isKindle = /Kindle|Silk/i.test(req.headers.get("user-agent") || "");
       const error = url.searchParams.get("error");
-      return html(LoginPage({ settings, error: error || undefined }));
+      const next = safeNext(url.searchParams.get("next"));
+      return html(LoginPage({ settings, error: error || undefined, next }));
     }
     
     if (method === "POST") {
@@ -115,10 +123,14 @@ async function routeRequest(req: Request): Promise<Response> {
   // Check session for protected routes
   type Session = { user: { id: string; role?: string | null } } | null;
   let session: Session = null;
-  if (AUTH_ENABLED && !isPublicPath(path)) {
+  if (AUTH_ENABLED) {
+    // Always identify the caller (public paths like /api/watch/* need the
+    // user too — e.g. pair confirm binds token↔user); only the redirect
+    // is limited to protected paths.
     session = await getSession(req) as Session;
-    if (!session) {
-      return redirect("/login");
+    if (!session && !isPublicPath(path)) {
+      const here = url.pathname + url.search;
+      return redirect("/login?next=" + encodeURIComponent(here));
     }
   }
 
@@ -218,7 +230,8 @@ async function handleLoginPost(req: Request): Promise<Response> {
 
     if (authResponse?.token) {
       // Create response with session cookie from Better Auth
-      const redirectResponse = redirect("/");
+      const next = safeNext(formData.get("next") as string | null);
+      const redirectResponse = redirect(next || "/");
       
       // Forward the set-cookie header from Better Auth
       const setCookie = authHeaders.get("set-cookie");

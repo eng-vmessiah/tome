@@ -131,6 +131,10 @@
           if (deps.nextPage) deps.nextPage();
         } else if (data.action === 'prev') {
           if (deps.prevPage) deps.prevPage();
+        } else if (data.action === 'scroll-down') {
+          if (deps.nextPage) deps.nextPage();
+        } else if (data.action === 'scroll-up') {
+          if (deps.prevPage) deps.prevPage();
         }
       } catch (err) {}
     };
