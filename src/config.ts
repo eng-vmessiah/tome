@@ -62,7 +62,8 @@ export const DEFAULT_READER_SETTINGS: ReaderSettings = {
   lineHeight: 1.6,
   readingWidth: 650,
   isKindle: false,
-  mode: 'paged',
+  // mode intentionally absent: the route applies a device default
+  // (scrolled on phones, paged on e-ink) when the user saved none.
 };
 
 // App version for cache busting

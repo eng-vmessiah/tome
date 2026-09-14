@@ -87,6 +87,12 @@ export interface Source {
   toplists?: ToplistType[];
   /** Extra actions shown on the library page (e.g. "Upload EPUB"). */
   libraryActions?: SourceNavLink[];
+  /**
+   * Preferred reader mode for image-first sources (e.g. comics): when the
+   * user saved no explicit mode and the device is a phone, the route starts
+   * in this mode instead of paged. Never overrides an explicit choice.
+   */
+  defaultMode?: "paged" | "scrolled";
 
   // Core trio (optional: a source without them only serves extraRoutes,
   // e.g. EPUB whose reader is a source-specific page)

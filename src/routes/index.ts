@@ -7,7 +7,7 @@ import { handleApiRoute } from "./api";
 import { ErrorPage, LoginPage, InvitePage, InviteExpiredPage } from "../templates";
 import { auth, getSession, AUTH_ENABLED } from "../lib/auth";
 import type { ThemeName } from "../config";
-import { getEnabledSources } from "../services/source-registry";
+import { getEnabledSources, getSourceByName } from "../services/source-registry";
 import { getFeatures } from "../services/feature-registry";
 import {
   getInvitationByToken,
@@ -75,7 +75,7 @@ async function routeRequest(req: Request): Promise<Response> {
   // Handle login page
   if (path === "/login") {
     if (method === "GET") {
-      const settings = parseReaderSettings(req.headers.get("cookie"));
+      const settings = { ...parseReaderSettings(req.headers.get("cookie")) };
       settings.isKindle = /Kindle|Silk/i.test(req.headers.get("user-agent") || "");
       const error = url.searchParams.get("error");
       const next = safeNext(url.searchParams.get("next"));
@@ -94,7 +94,7 @@ async function routeRequest(req: Request): Promise<Response> {
   const inviteMatch = path.match(/^\/invite\/([a-z0-9]+)$/);
   if (inviteMatch) {
     const token = inviteMatch[1];
-    const settings = parseReaderSettings(req.headers.get("cookie"));
+    const settings = { ...parseReaderSettings(req.headers.get("cookie")) };
     settings.isKindle = /Kindle|Silk/i.test(req.headers.get("user-agent") || "");
     
     if (!isInvitationValid(token)) {
@@ -137,8 +137,29 @@ async function routeRequest(req: Request): Promise<Response> {
   const userId = session?.user?.id || "anonymous";
   const isAdmin = session?.user?.role === "admin";
 
-  const settings = parseReaderSettings(req.headers.get("cookie"));
-  settings.isKindle = /Kindle|Silk/i.test(req.headers.get("user-agent") || "");
+  // Clone: parseReaderSettings may return the shared DEFAULT object — never
+  // mutate it (a previous version leaked isKindle across requests this way).
+  const settings = { ...parseReaderSettings(req.headers.get("cookie")) };
+  const ua = req.headers.get("user-agent") || "";
+  settings.isKindle = /Kindle|Silk/i.test(ua);
+  // No explicit mode saved yet: a source built for images (e.g. comics)
+  // starts phones in scrolled mode — paged multicol slices tall panels.
+  // Text sources keep paged; an explicit choice always wins.
+  if (!settings.mode) {
+    const sourceMatch = path.match(/^\/(?:api\/)?read\/([a-z0-9-]+)/);
+    const preferred = sourceMatch
+      ? getSourceByName(sourceMatch[1])?.defaultMode
+      : undefined;
+    if (
+      preferred === "scrolled" &&
+      !settings.isKindle &&
+      /Android|iPhone|iPad|iPod|Mobile/i.test(ua)
+    ) {
+      settings.mode = "scrolled";
+    } else {
+      settings.mode = "paged";
+    }
+  }
 
   console.log(`${method} ${path}`);
 

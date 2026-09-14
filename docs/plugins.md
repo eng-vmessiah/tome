@@ -51,6 +51,7 @@ Import `Source` from `"tome"`. A source must provide:
 | `displayName` | Human name shown in nav/settings. |
 | `capabilities` | Which capability ops are implemented (see below). |
 | `navLinks` | Header links shown when the source is enabled. |
+| `defaultMode` | `"scrolled"` for image-first sources (comics): phones with no saved mode start scrolled. Omit for text (paged). |
 
 ### Core trio
 
