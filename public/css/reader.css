@@ -200,6 +200,14 @@ body.kindle .reader-content {
   break-inside: avoid;
 }
 
+/* Comics are full-bleed panels: fill the column, never overflow it.
+   Scoped to asura via the wrapper's data-source so text-source
+   illustrations keep their intrinsic size. */
+.reader-wrapper[data-source="asura"] .reader-content img {
+  width: 100%;
+  max-width: 100%;
+}
+
 .reader-content::-webkit-scrollbar {
   display: none;
 }
