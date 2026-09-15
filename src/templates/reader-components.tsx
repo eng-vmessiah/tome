@@ -142,6 +142,23 @@ export function ModeSelector({ mode = "paged" }: { mode?: ReaderMode }): JSX.Ele
   );
 }
 
+/**
+ * Scroll smoothness (scrolled mode only) — instant / eased drift / longer sweep.
+ * Wired by reader.js (smooth-btn / data-smooth); reuses mode-btn styling.
+ */
+export function ScrollSmoothSelector(): JSX.Element {
+  return (
+    <div class="settings-row">
+      <label>Scroll Feel</label>
+      <div class="mode-controls">
+        <button class="theme-btn smooth-btn" data-smooth="off">Instant</button>
+        <button class="theme-btn smooth-btn" data-smooth="suave">Suave</button>
+        <button class="theme-btn smooth-btn" data-smooth="vivo">Vivo</button>
+      </div>
+    </div>
+  );
+}
+
 export function ProgressBar(): JSX.Element {
   return <div class="progress-bar"></div>;
 }
