@@ -218,7 +218,7 @@
     } else if (theme === 'sepia') {
       document.body.classList.add('sepia-mode');
     }
-    var btns = document.querySelectorAll('.theme-btn');
+    var btns = document.querySelectorAll('.theme-btn[data-theme]');
     for (var i = 0; i < btns.length; i++) {
       var t = btns[i].getAttribute('data-theme');
       btns[i].classList.toggle('active', t === theme);
@@ -361,27 +361,8 @@
     for (var i = 0; i < btns.length; i++) {
       btns[i].classList.toggle('active', btns[i].getAttribute('data-mode') === S.mode);
     }
-    // Scroll smoothness pills follow localStorage
-    var cur = scrollSmoothness();
-    var sbtns = document.querySelectorAll('.smooth-btn');
-    for (var j = 0; j < sbtns.length; j++) {
-      sbtns[j].classList.toggle('active', sbtns[j].getAttribute('data-smooth') === cur);
-      if (!sbtns[j]._smoothWired) {
-        sbtns[j]._smoothWired = true;
-        sbtns[j].addEventListener('click', function(ev) {
-          var v = ev.currentTarget.getAttribute('data-smooth');
-          try { localStorage.setItem('tome_scroll_smooth', v); } catch (e) {}
-          var all = document.querySelectorAll('.smooth-btn');
-          for (var k = 0; k < all.length; k++) {
-            all[k].classList.toggle('active', all[k].getAttribute('data-smooth') === v);
-          }
-        });
-      }
-    }
-    // Hide the selector entirely when in paged mode (no smooth scroll there)
-    var row = document.querySelectorAll('.smooth-btn').length
-      ? document.querySelector('.smooth-btn').closest('.settings-row') : null;
-    if (row) row.style.display = scrolled ? '' : 'none';
+    // Scroll-feel pills: selection + visibility follow the mode
+    syncScrollFeel();
     saveSettings();
   }
 
@@ -389,6 +370,92 @@
     if (mode === S.mode) return;
     S.mode = mode;
     applyMode();
+  }
+
+  // ============================================================
+  // SMOOTH SCROLL (watch / keyboard in scrolled mode)
+  // ============================================================
+  // Distance: fraction of a screen; motion persisted per device via
+  // localStorage 'tome_scroll_smooth': off (instant) | smooth (default) | glide.
+  // NOTE: these live at IIFE scope because applyMode()/init() both use them.
+  function scrollSmoothness() {
+    var s = 'smooth';
+    try { s = localStorage.getItem('tome_scroll_smooth') || 'smooth'; } catch (e) { s = 'smooth'; }
+    if (s === 'suave') s = 'smooth'; // legacy value from the first release
+    if (s === 'vivo') s = 'glide';
+    return s;
+  }
+
+  function stepFromPrefs() {
+    var s = scrollSmoothness();
+    if (s === 'glide') return window.innerHeight * 1.15;
+    if (s === 'off') return window.innerHeight * 0.85;
+    return window.innerHeight * 0.8;
+  }
+
+  function getScrollY() {
+    return window.scrollY || window.pageYOffset || document.documentElement.scrollTop || 0;
+  }
+
+  function raf(fn) {
+    if (window.requestAnimationFrame) { requestAnimationFrame(fn); }
+    else { setTimeout(function() { fn(Date.now()); }, 16); }
+  }
+
+  function scrollAnim(targetY, ms) {
+    var startY = getScrollY();
+    var delta = targetY - startY;
+    if (Math.abs(delta) < 2) return;
+    var t0 = (window.performance && performance.now) ? performance.now() : Date.now();
+    var ease = function(t) { // cubic in-out
+      return (t < 0.5) ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+    };
+    var frame = function(now) {
+      var t = Math.min(1, (now - t0) / ms);
+      window.scrollTo(0, Math.round(startY + delta * ease(t)));
+      if (t < 1) raf(frame);
+    };
+    raf(frame);
+  }
+
+  function scrollScreen(dir) {
+    var s = scrollSmoothness();
+    var step = stepFromPrefs();
+    if (s === 'off') {
+      window.scrollTo(0, getScrollY() + dir * step);
+      return;
+    }
+    var ms = (s === 'glide') ? 420 : 260;
+    scrollAnim(getScrollY() + dir * step, ms);
+  }
+
+  // ES5-safe ancestor lookup (no .closest for old Kindle browsers)
+  function closestSettingsRow(el) {
+    while (el && el !== document.body) {
+      if (el.classList && el.classList.contains('settings-row')) return el;
+      el = el.parentNode;
+    }
+    return null;
+  }
+
+  function setScrollSmooth(v) {
+    try { localStorage.setItem('tome_scroll_smooth', v); } catch (e) {}
+    var all = document.querySelectorAll('.smooth-btn');
+    for (var i = 0; i < all.length; i++) {
+      all[i].classList.toggle('active', all[i].getAttribute('data-smooth') === v);
+    }
+    saveSettings();
+  }
+
+  function syncScrollFeel() {
+    var cur = scrollSmoothness();
+    var scrolled = document.body.classList.contains('scrolled-mode');
+    var btns = document.querySelectorAll('.smooth-btn');
+    var row = btns.length ? closestSettingsRow(btns[0]) : null;
+    if (row) row.style.display = scrolled ? '' : 'none';
+    for (var i = 0; i < btns.length; i++) {
+      btns[i].classList.toggle('active', btns[i].getAttribute('data-smooth') === cur);
+    }
   }
 
   // ============================================================
@@ -778,7 +845,7 @@
     if (lineDecrease) lineDecrease.onclick = function() { changeLineHeight(-1); };
     if (lineIncrease) lineIncrease.onclick = function() { changeLineHeight(1); };
     
-    var themeBtns = document.querySelectorAll('.theme-btn');
+    var themeBtns = document.querySelectorAll('.theme-btn[data-theme]');
     for (var i = 0; i < themeBtns.length; i++) {
       (function(btn) {
         btn.onclick = function() {
@@ -795,6 +862,16 @@
         };
       })(modeBtns[i]);
     }
+
+    var smoothBtns = document.querySelectorAll('.smooth-btn');
+    for (var i = 0; i < smoothBtns.length; i++) {
+      (function(btn) {
+        btn.onclick = function() {
+          setScrollSmooth(btn.getAttribute('data-smooth'));
+        };
+      })(smoothBtns[i]);
+    }
+    syncScrollFeel();
     
     var widthDecrease = document.querySelector('.width-decrease');
     var widthIncrease = document.querySelector('.width-increase');
@@ -902,45 +979,6 @@
     }
     
 
-    // SMOOTH SCROLL (watch / keyboard in scrolled mode) — eased window animation.
-    // Distance: fraction of a screen; smoothness: localStorage 'tome_scroll_smooth'
-    // (off = instant page-turn, suave = eased drift, alive = longer eased sweep).
-    function scrollSmoothness() {
-      try { return localStorage.getItem('tome_scroll_smooth') || 'suave'; } catch (e) { return 'suave'; }
-    }
-    function stepFromPrefs() {
-      var s = scrollSmoothness();
-      if (s === 'vivo') return window.innerHeight * 1.15;
-      if (s === 'off') return window.innerHeight * 0.85;
-      return window.innerHeight * 0.8;
-    }
-    function scrollAnim(targetY, ms) {
-      var startY = window.scrollY || document.documentElement.scrollTop;
-      var delta = targetY - startY;
-      if (Math.abs(delta) < 2) return;
-      var t0 = window.performance ? performance.now() : Date.now();
-      var ease = function(t) { // cubic in-out
-        return (t < 0.5) ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
-      };
-      var frame = function(now) {
-        if (window.performance) {}
-        else now = Date.now();
-        var t = Math.min(1, (now - t0) / ms);
-        window.scrollTo(0, Math.round(startY + delta * ease(t)));
-        if (t < 1) requestAnimationFrame(frame);
-      };
-      requestAnimationFrame(frame);
-    }
-    function scrollScreen(dir) {
-      var s = scrollSmoothness();
-      var step = stepFromPrefs();
-      if (s === 'off') {
-        window.scrollBy({ top: dir * step, behavior: 'instant' });
-        return;
-      }
-      var ms = (s === 'vivo') ? 420 : 260;
-      scrollAnim((window.scrollY || 0) + dir * step, ms);
-    }
     // WATCH REMOTE (tome-feature-watch) — this page holds a reader WS so the
     // watch companion's POSTed actions reach it. Token from localStorage
     // (stored by /watch/pair after the QR ceremony, or typed in settings).
@@ -954,10 +992,9 @@
     function routeWatchAction(a) {
       var scrolled = document.body.classList.contains('scrolled-mode');
       if (scrolled) {
-        if (a === 'scroll-down') { scrollScreen(1); return; }
-        if (a === 'scroll-up')   { scrollScreen(-1); return; }
-        if (a === 'next') { scrollScreen(-1); return; } // gesture-directional fallback
-        if (a === 'prev') { scrollScreen(1); return; }
+        // 'next/prev' mean advance/back — in continuous mode that is down/up.
+        if (a === 'scroll-down' || a === 'next') { scrollScreen(1); return; }
+        if (a === 'scroll-up' || a === 'prev')   { scrollScreen(-1); return; }
       }
       if (a === 'next' || a === 'scroll-down') nextPage();
       else if (a === 'prev' || a === 'scroll-up') prevPage();
