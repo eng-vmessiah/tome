@@ -15,6 +15,7 @@ import {
   SettingsModal,
   ProgressBar,
   ModeSelector,
+  ScrollSmoothSelector,
 } from "../reader-components";
 
 /**
@@ -97,6 +98,7 @@ export function ReaderPage({
         readingWidth={settings.readingWidth || 650}
       >
         <ModeSelector mode={settings.mode ?? "paged"} />
+        <ScrollSmoothSelector />
       </SettingsModal>
     </ReaderLayout>
   );
