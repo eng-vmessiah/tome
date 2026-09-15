@@ -375,16 +375,20 @@
   // ============================================================
   // SMOOTH SCROLL (watch / keyboard in scrolled mode)
   // ============================================================
-  // Distance: fraction of a screen; smoothness persisted per device via
-  // localStorage 'tome_scroll_smooth': off (instant) | suave (default) | vivo.
+  // Distance: fraction of a screen; motion persisted per device via
+  // localStorage 'tome_scroll_smooth': off (instant) | smooth (default) | glide.
   // NOTE: these live at IIFE scope because applyMode()/init() both use them.
   function scrollSmoothness() {
-    try { return localStorage.getItem('tome_scroll_smooth') || 'suave'; } catch (e) { return 'suave'; }
+    var s = 'smooth';
+    try { s = localStorage.getItem('tome_scroll_smooth') || 'smooth'; } catch (e) { s = 'smooth'; }
+    if (s === 'suave') s = 'smooth'; // legacy value from the first release
+    if (s === 'vivo') s = 'glide';
+    return s;
   }
 
   function stepFromPrefs() {
     var s = scrollSmoothness();
-    if (s === 'vivo') return window.innerHeight * 1.15;
+    if (s === 'glide') return window.innerHeight * 1.15;
     if (s === 'off') return window.innerHeight * 0.85;
     return window.innerHeight * 0.8;
   }
@@ -421,7 +425,7 @@
       window.scrollTo(0, getScrollY() + dir * step);
       return;
     }
-    var ms = (s === 'vivo') ? 420 : 260;
+    var ms = (s === 'glide') ? 420 : 260;
     scrollAnim(getScrollY() + dir * step, ms);
   }
 
