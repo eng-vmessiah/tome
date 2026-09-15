@@ -951,6 +951,28 @@
     function getWatchToken() { try { return localStorage.getItem(WATCH_KEY); } catch (e) { return null; } }
     function setWatchStatus(t) { var el = document.getElementById('watch-status'); if (el) el.textContent = t; }
     function showWatchIcon(show) { var icon = document.getElementById('remote-icon'); if (icon) icon.style.display = show ? 'inline' : 'none'; }
+
+    // Hands-free reading: watch-driven scrolls and page-turns are not touch
+    // events, so Android never resets its screen-timeout on them and the
+    // screen dims mid-read. While a watch is paired and this page is visible,
+    // hold a Screen Wake Lock so the screen stays on. No-op where the API is
+    // unavailable (old browsers, insecure origins — needs https or localhost).
+    var wakeLock = null;
+    function syncWakeLock() {
+      var want = !!getWatchToken() && document.visibilityState === 'visible';
+      if (want && !wakeLock && navigator.wakeLock && navigator.wakeLock.request) {
+        try {
+          navigator.wakeLock.request('screen').then(function(lock) {
+            if (!getWatchToken()) { try { lock.release(); } catch (e) {} return; } // unpaired while acquiring
+            wakeLock = lock;
+            lock.addEventListener('release', function() { wakeLock = null; });
+          }).catch(function() {});
+        } catch (e) {}
+      } else if (!want && wakeLock) {
+        try { wakeLock.release(); } catch (e) {}
+        wakeLock = null;
+      }
+    }
     function routeWatchAction(a) {
       var scrolled = document.body.classList.contains('scrolled-mode');
       if (scrolled) {
@@ -992,6 +1014,7 @@
       try { localStorage.setItem(WATCH_KEY, token); } catch (e) {}
       setWatchStatus('Connecting...');
       connectWatch(token);
+      syncWakeLock();
     }
     function unpairWatch() {
       var token = getWatchToken();
@@ -1008,6 +1031,7 @@
       showWatchIcon(false);
       setWatchStatus('');
       updateWatchUI();
+      syncWakeLock();
     }
 
     TomeRemote.init({
@@ -1028,6 +1052,8 @@
     var savedWatch = getWatchToken();
     if (savedWatch) { setWatchStatus('Reconnecting watch...'); connectWatch(savedWatch); }
     updateWatchUI();
+    syncWakeLock();
+    document.addEventListener('visibilitychange', syncWakeLock);
   }
 
   // ============================================================
