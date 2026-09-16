@@ -425,14 +425,37 @@
     return Math.max(0, (document.documentElement.scrollHeight || 0) - window.innerHeight);
   }
 
-  /** Fine scroll (bezel/drag): smooth-move by px (+down / -up), clamped. */
+  /** Fine scroll (bezel/drag): feed a pixel accumulator, glide continuously.
+   *  Exponential smoothing (~30%/frame) instead of a per-message eased
+   *  animation: batched messages extend the accumulator while it drains, so
+   *  start/stop is silky and never restarts mid-flight (the old per-message
+   *  animation re-eased from zero on every batch => stuttery "stuck" feel). */
+  var byAccum = 0;
+  var byActive = false;
   function scrollByPx(px) {
     if (!px) return;
-    var target = Math.min(maxScrollY(), Math.max(0, getScrollY() + px));
-    scrollAnim(target, Math.min(400, Math.max(110, Math.abs(px) * 1.1)));
+    scrollAnimSeq++; // any eased animation yields to the glide
+    byAccum += px;
+    if (byAccum > 1600) byAccum = 1600; else if (byAccum < -1600) byAccum = -1600;
+    if (!byActive) { byActive = true; raf(byFrame); }
   }
+  function byFrame() {
+    var max = maxScrollY();
+    var y = getScrollY();
+    var step = byAccum * 0.30;
+    if (step > 120) step = 120; else if (step < -120) step = -120;
+    if (Math.abs(step) < 0.8) { byAccum = 0; byActive = false; return; }
+    var target = y + step;
+    if (target < 0) target = 0; else if (target > max) target = max;
+    window.scrollTo(0, Math.round(target));
+    byAccum -= (target - y);
+    if ((target <= 0 && byAccum < 0) || (target >= max && byAccum > 0)) byAccum = 0;
+    if (byActive) raf(byFrame);
+  }
+  function stopByGlide() { byAccum = 0; byActive = false; }
 
   function scrollScreen(dir) {
+    stopByGlide();
     var s = scrollSmoothness();
     var step = stepFromPrefs();
     if (s === 'off') {
@@ -1043,6 +1066,7 @@
     }
     function startAutoScroll() {
       if (autoScrollOn) return;
+      stopByGlide();
       autoScrollOn = true;
       autoScrollLast = 0;
       scrollAnimSeq++; // cancel any running animation
