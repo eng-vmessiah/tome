@@ -1032,6 +1032,8 @@
     // the session in sqlite with sliding expiry. Unpair burns both ends.
     var WATCH_KEY = 'tome_watch_token';
     var watchWs = null;
+    var watchRetryTimer = null;
+    var watchRetryDelay = 1000; // 1s, doubling up to 30s
     function getWatchToken() { try { return localStorage.getItem(WATCH_KEY); } catch (e) { return null; } }
     function setWatchStatus(t) { var el = document.getElementById('watch-status'); if (el) el.textContent = t; }
     function showWatchIcon(show) { var icon = document.getElementById('remote-icon'); if (icon) icon.style.display = show ? 'inline' : 'none'; }
@@ -1171,12 +1173,43 @@
       if (watchWs) { try { watchWs.close(); } catch (e) {} watchWs = null; }
       if (!token) return;
       var scheme = window.location.protocol === 'https:' ? 'wss' : 'ws';
+      var ws;
       try {
-        watchWs = new WebSocket(scheme + '://' + window.location.host + '/ws/watch/' + encodeURIComponent(token) + '?role=reader');
-      } catch (e) { setWatchStatus('Connection failed'); updateWatchUI(); return; }
-      watchWs.onopen = function() { setWatchStatus('Watch connected'); showWatchIcon(true); updateWatchUI(); };
-      watchWs.onmessage = function(e) { try { var d = JSON.parse(e.data); if (d && d.action) routeWatchAction(d.action, d.px, d.speed); } catch (err) {} };
-      watchWs.onclose = function() { watchWs = null; showWatchIcon(false); setWatchStatus('Watch disconnected'); updateWatchUI(); };
+        ws = new WebSocket(scheme + '://' + window.location.host + '/ws/watch/' + encodeURIComponent(token) + '?role=reader');
+      } catch (e) { setWatchStatus('Connection failed'); updateWatchUI(); scheduleWatchReconnect(); return; }
+      watchWs = ws;
+      ws.onopen = function() {
+        if (watchWs !== ws) return; // superseded by a newer attempt
+        watchRetryDelay = 1000; // healthy — reset backoff
+        setWatchStatus('Watch connected'); showWatchIcon(true); updateWatchUI();
+      };
+      ws.onmessage = function(e) { if (watchWs !== ws) return; try { var d = JSON.parse(e.data); if (d && d.action) routeWatchAction(d.action, d.px, d.speed); } catch (err) {} };
+      ws.onclose = function() {
+        if (watchWs !== ws) return; // closed by a newer attempt or unpair — ignore
+        watchWs = null;
+        showWatchIcon(false);
+        if (getWatchToken()) {
+          setWatchStatus('Watch disconnected');
+          scheduleWatchReconnect();
+        } else {
+          setWatchStatus('');
+        }
+        updateWatchUI();
+      };
+    }
+    // Auto-reconnect with exponential backoff (1s → 30s cap). Only while a
+    // token is stored; a hidden tab defers to the visibility handler instead.
+    function scheduleWatchReconnect() {
+      if (watchRetryTimer) return;
+      var delay = watchRetryDelay;
+      watchRetryDelay = Math.min(watchRetryDelay * 2, 30000);
+      watchRetryTimer = setTimeout(function() {
+        watchRetryTimer = null;
+        if (!getWatchToken() || watchWs) return;
+        if (document.visibilityState !== 'visible') return; // reconnect on visible
+        setWatchStatus('Reconnecting watch...');
+        connectWatch(getWatchToken());
+      }, delay);
     }
     function pairWatch() {
       var input = document.getElementById('watch-token-input');
@@ -1199,6 +1232,7 @@
           xhr.send();
         } catch (e) {}
       }
+      if (watchRetryTimer) { clearTimeout(watchRetryTimer); watchRetryTimer = null; }
       showWatchIcon(false);
       setWatchStatus('');
       updateWatchUI();
@@ -1232,6 +1266,29 @@
     updateWatchUI();
     syncWakeLock();
     document.addEventListener('visibilitychange', syncWakeLock);
+    // Reconnect when the tab returns to the foreground (screen was off mid-read).
+    document.addEventListener('visibilitychange', function() {
+      if (document.visibilityState !== 'visible') return;
+      if (watchWs) return;
+      var t = getWatchToken();
+      if (t) { setWatchStatus('Reconnecting watch...'); connectWatch(t); }
+    });
+    // Pairing/unpairing in ANOTHER tab (the QR pair page stores the token):
+    // pick the change up live — no reload needed.
+    window.addEventListener('storage', function(e) {
+      if (e.key !== WATCH_KEY) return;
+      if (e.newValue) {
+        setWatchStatus('Connecting...');
+        connectWatch(e.newValue);
+      } else {
+        if (watchWs) { try { watchWs.close(); } catch (err) {} watchWs = null; }
+        if (watchRetryTimer) { clearTimeout(watchRetryTimer); watchRetryTimer = null; }
+        showWatchIcon(false);
+        setWatchStatus('');
+      }
+      updateWatchUI();
+      syncWakeLock();
+    });
   }
 
   // ============================================================
