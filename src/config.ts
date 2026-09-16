@@ -67,4 +67,4 @@ export const DEFAULT_READER_SETTINGS: ReaderSettings = {
 };
 
 // App version for cache busting
-export const APP_VERSION = "1.5.7-dev";
+export const APP_VERSION = "1.5.8-dev";
