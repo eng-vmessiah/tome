@@ -426,12 +426,14 @@
   }
 
   /** Fine scroll (bezel/drag): feed a pixel accumulator, glide continuously.
-   *  Exponential smoothing (~30%/frame) instead of a per-message eased
+   *  Exponential smoothing (~20%/frame) instead of a per-message eased
    *  animation: batched messages extend the accumulator while it drains, so
-   *  start/stop is silky and never restarts mid-flight (the old per-message
-   *  animation re-eased from zero on every batch => stuttery "stuck" feel). */
+   *  start/stop is silky and never restarts mid-flight. The gentler drain
+   *  (~0.35s to empty) bridges gaps between bezel batches — a micropausa
+   *  in the rub no longer halts the page. */
   var byAccum = 0;
   var byActive = false;
+  var byCarry = 0; // fractional px remainder (compositor snaps sub-pixel targets)
   function scrollByPx(px) {
     if (!px) return;
     scrollAnimSeq++; // any eased animation yields to the glide
@@ -442,17 +444,24 @@
   function byFrame() {
     var max = maxScrollY();
     var y = getScrollY();
-    var step = byAccum * 0.30;
+    // drain the accumulator all the way down (stop at <0.5px, not <4): at ~0.2
+    // per frame that coasts ~0.42s — longer than the watch's batched flushes,
+    // so consecutive batches overlap and the rub never dead-stops mid-motion.
+    if (Math.abs(byAccum) < 0.5) { byAccum = 0; byActive = false; return; }
+    var step = byAccum * 0.20;
     if (step > 120) step = 120; else if (step < -120) step = -120;
-    if (Math.abs(step) < 0.8) { byAccum = 0; byActive = false; return; }
-    var target = y + step;
+    byCarry += step;
+    var move = byCarry > 0 ? Math.floor(byCarry) : Math.ceil(byCarry);
+    if (move === 0) { raf(byFrame); return; } // accumulate toward a whole pixel
+    byCarry -= move;
+    var target = y + move;
     if (target < 0) target = 0; else if (target > max) target = max;
-    window.scrollTo(0, Math.round(target));
+    window.scrollTo(0, target);
     byAccum -= (target - y);
     if ((target <= 0 && byAccum < 0) || (target >= max && byAccum > 0)) byAccum = 0;
     if (byActive) raf(byFrame);
   }
-  function stopByGlide() { byAccum = 0; byActive = false; }
+  function stopByGlide() { byAccum = 0; byActive = false; byCarry = 0; }
 
   function scrollScreen(dir) {
     stopByGlide();
@@ -1053,7 +1062,8 @@
     // touch/wheel/visibility change.
     var autoScrollOn = false;
     var autoScrollLast = 0;
-    var AUTO_SCROLL_SPEED = 90; // px/s — reading pace (tunable)
+    var autoScrollCarry = 0; // fractional px remainder (see frame fn)
+    var AUTO_SCROLL_SPEED = 95; // px/s — default = watch speed 50 (= old 90 pace)
     function autoScrollFrame(now) {
       if (!autoScrollOn) return;
       var dt = autoScrollLast ? Math.min(100, now - autoScrollLast) : 16;
@@ -1061,25 +1071,37 @@
       var max = maxScrollY();
       var y = getScrollY();
       if (y >= max - 4) { stopAutoScroll(); return; } // fim do capítulo
-      window.scrollTo(0, Math.min(max, y + AUTO_SCROLL_SPEED * dt / 1000));
+      // accumulate fractional pixels: at slow paces a sub-pixel scrollTo target
+      // gets snapped by the compositor (0.16px/frame => 0), so keep the
+      // remainder and emit it as whole pixels (also fixes round-up inflation).
+      autoScrollCarry += AUTO_SCROLL_SPEED * dt / 1000;
+      var move = Math.floor(autoScrollCarry);
+      if (move >= 1) {
+        autoScrollCarry -= move;
+        window.scrollTo(0, Math.min(max, y + move));
+      }
       raf(autoScrollFrame);
     }
-    function startAutoScroll() {
+    /** speed: watch-side 0..100 (50 = default ≈ 95px/s; 0 ≈ 10, 100 ≈ 180) */
+    function startAutoScroll(speed) {
       if (autoScrollOn) return;
       stopByGlide();
+      var s = (typeof speed === 'number' && isFinite(speed)) ? Math.max(0, Math.min(100, speed)) : 50;
+      AUTO_SCROLL_SPEED = 10 + s * 1.7;
       autoScrollOn = true;
       autoScrollLast = 0;
+      autoScrollCarry = 0;
       scrollAnimSeq++; // cancel any running animation
       raf(autoScrollFrame);
     }
     function stopAutoScroll() {
       autoScrollOn = false;
     }
-    function routeWatchAction(a, px) {
+    function routeWatchAction(a, px, speed) {
       if (a !== 'autoscroll') stopAutoScroll(); // manual input wins
       var scrolled = document.body.classList.contains('scrolled-mode');
       if (scrolled) {
-        if (a === 'autoscroll') { if (autoScrollOn) stopAutoScroll(); else startAutoScroll(); return; }
+        if (a === 'autoscroll') { if (autoScrollOn) stopAutoScroll(); else startAutoScroll(speed); return; }
         if (a === 'scroll-by') { scrollByPx(px); return; }
         // 'next/prev' mean advance/back — in continuous mode that is down/up.
         if (a === 'scroll-down' || a === 'next') { scrollScreen(1); return; }
@@ -1118,7 +1140,7 @@
         watchWs = new WebSocket(scheme + '://' + window.location.host + '/ws/watch/' + encodeURIComponent(token) + '?role=reader');
       } catch (e) { setWatchStatus('Connection failed'); updateWatchUI(); return; }
       watchWs.onopen = function() { setWatchStatus('Watch connected'); showWatchIcon(true); updateWatchUI(); };
-      watchWs.onmessage = function(e) { try { var d = JSON.parse(e.data); if (d && d.action) routeWatchAction(d.action, d.px); } catch (err) {} };
+      watchWs.onmessage = function(e) { try { var d = JSON.parse(e.data); if (d && d.action) routeWatchAction(d.action, d.px, d.speed); } catch (err) {} };
       watchWs.onclose = function() { watchWs = null; showWatchIcon(false); setWatchStatus('Watch disconnected'); updateWatchUI(); };
     }
     function pairWatch() {
