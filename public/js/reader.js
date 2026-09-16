@@ -277,6 +277,10 @@
     if (S.els.modal && S.els.modal.classList.contains('open')) return;
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
 
+    // any manual key press overrides ambient scrolling (autoscroll/glide)
+    stopAutoScroll();
+    stopByGlide();
+
     if (S.isDesktop || S.mode === 'scrolled') {
       switch (e.key) {
         case 'ArrowLeft': {
@@ -293,7 +297,7 @@
         }
         case 'ArrowDown':
           e.preventDefault();
-          window.scrollBy({ top: 60, behavior: 'instant' });
+          window.scrollBy(0, 60);
           break;
         case 'ArrowUp':
           e.preventDefault();
@@ -432,36 +436,98 @@
    *  (~0.35s to empty) bridges gaps between bezel batches — a micropausa
    *  in the rub no longer halts the page. */
   var byAccum = 0;
-  var byActive = false;
+  var byPending = false; // exactly ONE rAF chain may ever be queued
   var byCarry = 0; // fractional px remainder (compositor snaps sub-pixel targets)
+  function queueByFrame() {
+    if (byPending) return;
+    byPending = true;
+    raf(byFrame);
+  }
   function scrollByPx(px) {
-    if (!px) return;
+    px = Number(px);
+    if (!isFinite(px) || px === 0) return; // NaN would loop forever below
     scrollAnimSeq++; // any eased animation yields to the glide
     byAccum += px;
     if (byAccum > 1600) byAccum = 1600; else if (byAccum < -1600) byAccum = -1600;
-    if (!byActive) { byActive = true; raf(byFrame); }
+    queueByFrame();
   }
   function byFrame() {
+    byPending = false;
     var max = maxScrollY();
     var y = getScrollY();
     // drain the accumulator all the way down (stop at <0.5px, not <4): at ~0.2
     // per frame that coasts ~0.42s — longer than the watch's batched flushes,
     // so consecutive batches overlap and the rub never dead-stops mid-motion.
-    if (Math.abs(byAccum) < 0.5) { byAccum = 0; byActive = false; return; }
+    if (Math.abs(byAccum) < 0.5) { byAccum = 0; return; }
     var step = byAccum * 0.20;
     if (step > 120) step = 120; else if (step < -120) step = -120;
     byCarry += step;
     var move = byCarry > 0 ? Math.floor(byCarry) : Math.ceil(byCarry);
-    if (move === 0) { raf(byFrame); return; } // accumulate toward a whole pixel
+    if (move === 0) { queueByFrame(); return; } // accumulate toward a whole pixel
     byCarry -= move;
     var target = y + move;
     if (target < 0) target = 0; else if (target > max) target = max;
     window.scrollTo(0, target);
     byAccum -= (target - y);
     if ((target <= 0 && byAccum < 0) || (target >= max && byAccum > 0)) byAccum = 0;
-    if (byActive) raf(byFrame);
+    queueByFrame();
   }
-  function stopByGlide() { byAccum = 0; byActive = false; byCarry = 0; }
+  function stopByGlide() { byAccum = 0; byCarry = 0; }
+
+  /** Visibility helpers: old WebKit engines (the e-ink target) may not expose
+   *  document.visibilityState — treat "unknown" as visible so the watch still
+   *  reconnects and the screen keeper still engages there. */
+  function docVisible() {
+    var v = document.visibilityState || document.webkitVisibilityState;
+    return v === undefined ? true : v === 'visible';
+  }
+  function onVisibility(fn) {
+    document.addEventListener('visibilitychange', fn);
+    if (typeof document.onwebkitvisibilitychange !== 'undefined') {
+      document.addEventListener('webkitvisibilitychange', fn);
+    }
+  }
+
+  // Auto-scroll ("scroll infinito"): continuous reading scroll, toggled by the
+  // watch. IIFE scope ON PURPOSE: core paths (renderChapter, handleKeyboard)
+  // must be able to stop it; init()-scoped helpers would ReferenceError there.
+  var autoScrollOn = false;
+  var autoScrollLast = 0;
+  var autoScrollCarry = 0; // fractional px remainder (see frame fn)
+  var AUTO_SCROLL_SPEED = 95; // px/s — default = watch speed 50 (= old 90 pace)
+  function autoScrollFrame(now) {
+    if (!autoScrollOn) return;
+    var dt = autoScrollLast ? Math.min(100, now - autoScrollLast) : 16;
+    autoScrollLast = now;
+    var max = maxScrollY();
+    var y = getScrollY();
+    if (y >= max - 4) { stopAutoScroll(); return; } // fim do capítulo
+    // accumulate fractional pixels: at slow paces a sub-pixel scrollTo target
+    // gets snapped by the compositor (0.16px/frame => 0), so keep the
+    // remainder and emit it as whole pixels (also fixes round-up inflation).
+    autoScrollCarry += AUTO_SCROLL_SPEED * dt / 1000;
+    var move = Math.floor(autoScrollCarry);
+    if (move >= 1) {
+      autoScrollCarry -= move;
+      window.scrollTo(0, Math.min(max, y + move));
+    }
+    raf(autoScrollFrame);
+  }
+  /** speed: watch-side 0..100 (50 = default ≈ 95px/s; 0 ≈ 10, 100 ≈ 180) */
+  function startAutoScroll(speed) {
+    if (autoScrollOn) return;
+    stopByGlide();
+    var s = (typeof speed === 'number' && isFinite(speed)) ? Math.max(0, Math.min(100, speed)) : 50;
+    AUTO_SCROLL_SPEED = 10 + s * 1.7;
+    autoScrollOn = true;
+    autoScrollLast = 0;
+    autoScrollCarry = 0;
+    scrollAnimSeq++; // cancel any running animation
+    raf(autoScrollFrame);
+  }
+  function stopAutoScroll() {
+    autoScrollOn = false;
+  }
 
   function scrollScreen(dir) {
     stopByGlide();
@@ -609,7 +675,7 @@
 
   function nextPage() {
     if (S.mode === 'scrolled') {
-      window.scrollBy({ top: window.innerHeight * 0.85, behavior: 'instant' });
+      window.scrollBy(0, window.innerHeight * 0.85);
       return;
     }
     if (S.page < S.totalPages - 1) {
@@ -629,7 +695,7 @@
 
   function prevPage() {
     if (S.mode === 'scrolled') {
-      window.scrollBy({ top: -window.innerHeight * 0.85, behavior: 'instant' });
+      window.scrollBy(0, -window.innerHeight * 0.85);
       return;
     }
     if (S.page > 0) {
@@ -755,6 +821,8 @@
     updateNavButtons(chapter.prevRef, chapter.nextRef);
     
     S.page = 0;
+    stopByGlide();    // never let glide residue from the previous chapter leak in
+    stopAutoScroll(); // manual navigation wins over ambient scrolling
     if (S.isDesktop || S.mode === 'scrolled') {
       window.scrollTo(0, 0);
     } else {
@@ -1047,6 +1115,7 @@
     //      browser reports ongoing media playback, so Android keeps the
     //      screen on (NoSleep-style, ~0.6KB webm, no audio track).
     var wakeLock = null;
+    var wakeLockPending = false;
     var keeperVideo = null;
     var KEEPER_SRC = 'data:video/webm;base64,GkXfo59ChoEBQveBAULygQRC84EIQoKEd2VibUKHgQJChYECGFOAZwEAAAAAAAI/EU2bdLpNu4tTq4QVSalmU6yBoU27i1OrhBZUrmtTrIHYTbuMU6uEElTDZ1OsggEeTbuMU6uEHFO7a1OsggIp7AEAAAAAAABZAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAVSalmsirXsYMPQkBNgI1MYXZmNjAuMTYuMTAwV0GNTGF2ZjYwLjE2LjEwMESJiEB/QAAAAAAAFlSua8GuAQAAAAAAADjXgQFzxYjSWR5fTR8425yBACK1nIN1bmSIgQCGhVZfVlA4g4EBI+ODhAX14QDgibCBBLqBBJqBAhJUw2f8c3OgY8CAZ8iaRaOHRU5DT0RFUkSHjUxhdmY2MC4xNi4xMDBzc9ZjwItjxYjSWR5fTR8422fIoUWjh0VOQ09ERVJEh5RMYXZjNjAuMzEuMTAyIGxpYnZweGfIoUWjiERVUkFUSU9ORIeTMDA6MDA6MDAuNTAwMDAwMDAwAB9DtnVAhOeBAKOjgQAAgBACAJ0BKgQABAAARwiFhYiFhIgCAgAMDWAA/v+rUICjlYEAZACxAQADEGAAGAAYWC/0AAgAAKOVgQDIALEBAAMQNAAYABhYL/QACAAAo5WBASwAsQEAAxAsABgAGFgv9AAIAACjlYEBkACxAQADECQAGAAYWC/0AAgAABxTu2uRu4+zgQC3iveBAfGCAZ/wgQM=';
     function startKeeperVideo() {
@@ -1073,16 +1142,20 @@
       try { keeperVideo.pause(); } catch (e) {}
     }
     function syncWakeLock() {
-      var want = !!getWatchToken() && document.visibilityState === 'visible';
+      var want = !!getWatchToken() && docVisible();
       var hasApi = !!(navigator.wakeLock && navigator.wakeLock.request);
-      if (want && !wakeLock && hasApi) {
+      if (want && !wakeLock && !wakeLockPending && hasApi) {
+        wakeLockPending = true;
         try {
           navigator.wakeLock.request('screen').then(function(lock) {
-            if (!getWatchToken()) { try { lock.release(); } catch (e) {} return; } // unpaired while acquiring
+            wakeLockPending = false;
+            if (!getWatchToken() || !docVisible()) { try { lock.release(); } catch (e) {} return; } // invalidated while acquiring
+            if (wakeLock) { try { lock.release(); } catch (e) {} return; } // a newer lock already holds
             wakeLock = lock;
-            lock.addEventListener('release', function() { wakeLock = null; });
-          }).catch(function() { if (want) startKeeperVideo(); });
-        } catch (e) { startKeeperVideo(); }
+            stopKeeperVideo(); // lock granted — the video fallback is no longer needed
+            lock.addEventListener('release', function() { if (wakeLock === lock) wakeLock = null; });
+          }).catch(function() { wakeLockPending = false; if (want) startKeeperVideo(); });
+        } catch (e) { wakeLockPending = false; startKeeperVideo(); }
       } else if (!want && wakeLock) {
         try { wakeLock.release(); } catch (e) {}
         wakeLock = null;
@@ -1093,46 +1166,6 @@
       } else if (!want) {
         stopKeeperVideo();
       }
-    }
-    // Auto-scroll ("scroll infinito"): continuous reading scroll, toggled by
-    // the watch. Stops at chapter end, on any other watch action, or on user
-    // touch/wheel/visibility change.
-    var autoScrollOn = false;
-    var autoScrollLast = 0;
-    var autoScrollCarry = 0; // fractional px remainder (see frame fn)
-    var AUTO_SCROLL_SPEED = 95; // px/s — default = watch speed 50 (= old 90 pace)
-    function autoScrollFrame(now) {
-      if (!autoScrollOn) return;
-      var dt = autoScrollLast ? Math.min(100, now - autoScrollLast) : 16;
-      autoScrollLast = now;
-      var max = maxScrollY();
-      var y = getScrollY();
-      if (y >= max - 4) { stopAutoScroll(); return; } // fim do capítulo
-      // accumulate fractional pixels: at slow paces a sub-pixel scrollTo target
-      // gets snapped by the compositor (0.16px/frame => 0), so keep the
-      // remainder and emit it as whole pixels (also fixes round-up inflation).
-      autoScrollCarry += AUTO_SCROLL_SPEED * dt / 1000;
-      var move = Math.floor(autoScrollCarry);
-      if (move >= 1) {
-        autoScrollCarry -= move;
-        window.scrollTo(0, Math.min(max, y + move));
-      }
-      raf(autoScrollFrame);
-    }
-    /** speed: watch-side 0..100 (50 = default ≈ 95px/s; 0 ≈ 10, 100 ≈ 180) */
-    function startAutoScroll(speed) {
-      if (autoScrollOn) return;
-      stopByGlide();
-      var s = (typeof speed === 'number' && isFinite(speed)) ? Math.max(0, Math.min(100, speed)) : 50;
-      AUTO_SCROLL_SPEED = 10 + s * 1.7;
-      autoScrollOn = true;
-      autoScrollLast = 0;
-      autoScrollCarry = 0;
-      scrollAnimSeq++; // cancel any running animation
-      raf(autoScrollFrame);
-    }
-    function stopAutoScroll() {
-      autoScrollOn = false;
     }
     function routeWatchAction(a, px, speed) {
       if (a !== 'autoscroll') stopAutoScroll(); // manual input wins
@@ -1151,8 +1184,8 @@
     document.addEventListener('touchstart', stopAutoScroll, { passive: true });
     document.addEventListener('mousedown', stopAutoScroll);
     document.addEventListener('wheel', stopAutoScroll, { passive: true });
-    document.addEventListener('visibilitychange', function() {
-      if (document.visibilityState !== 'visible') stopAutoScroll();
+    onVisibility(function() {
+      if (!docVisible()) stopAutoScroll();
     });
     function updateWatchUI() {
       var form = document.getElementById('watch-pair');
@@ -1184,11 +1217,16 @@
         setWatchStatus('Watch connected'); showWatchIcon(true); updateWatchUI();
       };
       ws.onmessage = function(e) { if (watchWs !== ws) return; try { var d = JSON.parse(e.data); if (d && d.action) routeWatchAction(d.action, d.px, d.speed); } catch (err) {} };
-      ws.onclose = function() {
+      ws.onclose = function(ev) {
         if (watchWs !== ws) return; // closed by a newer attempt or unpair — ignore
         watchWs = null;
         showWatchIcon(false);
-        if (getWatchToken()) {
+        if (ev && ev.code === 1008 && getWatchToken()) {
+          // server rejected the session (invalid/revoked token): don't retry forever
+          try { localStorage.removeItem(WATCH_KEY); } catch (err) {}
+          setWatchStatus('Invalid session — check the token');
+          syncWakeLock(); // token gone => release lock/keeper
+        } else if (getWatchToken()) {
           setWatchStatus('Watch disconnected');
           scheduleWatchReconnect();
         } else {
@@ -1206,7 +1244,8 @@
       watchRetryTimer = setTimeout(function() {
         watchRetryTimer = null;
         if (!getWatchToken() || watchWs) return;
-        if (document.visibilityState !== 'visible') return; // reconnect on visible
+        var v = document.visibilityState || document.webkitVisibilityState;
+        if (v === 'hidden') return; // reconnect on visible
         setWatchStatus('Reconnecting watch...');
         connectWatch(getWatchToken());
       }, delay);
@@ -1233,6 +1272,8 @@
         } catch (e) {}
       }
       if (watchRetryTimer) { clearTimeout(watchRetryTimer); watchRetryTimer = null; }
+      stopAutoScroll(); // unpair = no watch driving this page anymore
+      stopByGlide();
       showWatchIcon(false);
       setWatchStatus('');
       updateWatchUI();
@@ -1265,10 +1306,10 @@
     if (savedWatch) { setWatchStatus('Reconnecting watch...'); connectWatch(savedWatch); }
     updateWatchUI();
     syncWakeLock();
-    document.addEventListener('visibilitychange', syncWakeLock);
+    onVisibility(syncWakeLock);
     // Reconnect when the tab returns to the foreground (screen was off mid-read).
-    document.addEventListener('visibilitychange', function() {
-      if (document.visibilityState !== 'visible') return;
+    onVisibility(function() {
+      if (!docVisible()) return;
       if (watchWs) return;
       var t = getWatchToken();
       if (t) { setWatchStatus('Reconnecting watch...'); connectWatch(t); }
@@ -1283,6 +1324,8 @@
       } else {
         if (watchWs) { try { watchWs.close(); } catch (err) {} watchWs = null; }
         if (watchRetryTimer) { clearTimeout(watchRetryTimer); watchRetryTimer = null; }
+        stopAutoScroll(); // token removed in another tab = no watch driving this page
+        stopByGlide();
         showWatchIcon(false);
         setWatchStatus('');
       }
