@@ -137,6 +137,21 @@ export function RemotePage({
             text-align: right;
             font-style: italic;
           }
+          #cam-video {
+            width: 72px;
+            height: 54px;
+            border-radius: 6px;
+            background: #000;
+            transform: scaleX(-1);
+            display: none;
+            object-fit: cover;
+          }
+          #cam-video.on { display: block; }
+          #cam-btn.active {
+            border-color: #4caf50;
+            background: #1b3a1b;
+            color: #4caf50;
+          }
           @keyframes pulse {
             0%, 100% { box-shadow: 0 0 0 0 rgba(76, 175, 80, 0.4); }
             50% { box-shadow: 0 0 0 10px rgba(76, 175, 80, 0); }
@@ -297,12 +312,18 @@ export function RemotePage({
               </svg>
             </button>
           </div>
+          <div class="voice-bar" id="cam-bar">
+            <span class="voice-label" id="cam-label">Camera off</span>
+            <button class="mic-btn" id="cam-btn" title="Toggle camera control">📷</button>
+            <video id="cam-video" muted autoplay></video>
+          </div>
           <div class="status-bar">
             <span class="status-indicator connecting" id="indicator"></span>
             <span class="status-text" id="status">Connecting...</span>
           </div>
         </div>
 
+        <script src="/public/js/remote-camera.js"></script>
         <script>{`
 (function() {
   var wsUrl = '${wsUrl}';
@@ -646,6 +667,17 @@ export function RemotePage({
   }
 
   micBtn.onclick = toggleVoice;
+
+  // Camera swipe control (MediaPipe, lazy-loads on first tap)
+  if (window.TomeCamera) {
+    TomeCamera.attach({
+      btn: document.getElementById('cam-btn'),
+      label: document.getElementById('cam-label'),
+      video: document.getElementById('cam-video'),
+      send: send,
+      isConnected: function() { return connected; }
+    });
+  }
 
   // Initial setup
   if (!SpeechRecognition) {
