@@ -402,7 +402,9 @@
     else { setTimeout(function() { fn(Date.now()); }, 16); }
   }
 
+  var scrollAnimSeq = 0;
   function scrollAnim(targetY, ms) {
+    var seq = ++scrollAnimSeq;
     var startY = getScrollY();
     var delta = targetY - startY;
     if (Math.abs(delta) < 2) return;
@@ -411,11 +413,23 @@
       return (t < 0.5) ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
     };
     var frame = function(now) {
+      if (seq !== scrollAnimSeq) return; // superseded by a newer target
       var t = Math.min(1, (now - t0) / ms);
       window.scrollTo(0, Math.round(startY + delta * ease(t)));
       if (t < 1) raf(frame);
     };
     raf(frame);
+  }
+
+  function maxScrollY() {
+    return Math.max(0, (document.documentElement.scrollHeight || 0) - window.innerHeight);
+  }
+
+  /** Fine scroll (bezel/drag): smooth-move by px (+down / -up), clamped. */
+  function scrollByPx(px) {
+    if (!px) return;
+    var target = Math.min(maxScrollY(), Math.max(0, getScrollY() + px));
+    scrollAnim(target, Math.min(400, Math.max(110, Math.abs(px) * 1.1)));
   }
 
   function scrollScreen(dir) {
@@ -1011,9 +1025,38 @@
         wakeLock = null;
       }
     }
-    function routeWatchAction(a) {
+    // Auto-scroll ("scroll infinito"): continuous reading scroll, toggled by
+    // the watch. Stops at chapter end, on any other watch action, or on user
+    // touch/wheel/visibility change.
+    var autoScrollOn = false;
+    var autoScrollLast = 0;
+    var AUTO_SCROLL_SPEED = 90; // px/s — reading pace (tunable)
+    function autoScrollFrame(now) {
+      if (!autoScrollOn) return;
+      var dt = autoScrollLast ? Math.min(100, now - autoScrollLast) : 16;
+      autoScrollLast = now;
+      var max = maxScrollY();
+      var y = getScrollY();
+      if (y >= max - 4) { stopAutoScroll(); return; } // fim do capítulo
+      window.scrollTo(0, Math.min(max, y + AUTO_SCROLL_SPEED * dt / 1000));
+      raf(autoScrollFrame);
+    }
+    function startAutoScroll() {
+      if (autoScrollOn) return;
+      autoScrollOn = true;
+      autoScrollLast = 0;
+      scrollAnimSeq++; // cancel any running animation
+      raf(autoScrollFrame);
+    }
+    function stopAutoScroll() {
+      autoScrollOn = false;
+    }
+    function routeWatchAction(a, px) {
+      if (a !== 'autoscroll') stopAutoScroll(); // manual input wins
       var scrolled = document.body.classList.contains('scrolled-mode');
       if (scrolled) {
+        if (a === 'autoscroll') { if (autoScrollOn) stopAutoScroll(); else startAutoScroll(); return; }
+        if (a === 'scroll-by') { scrollByPx(px); return; }
         // 'next/prev' mean advance/back — in continuous mode that is down/up.
         if (a === 'scroll-down' || a === 'next') { scrollScreen(1); return; }
         if (a === 'scroll-up' || a === 'prev')   { scrollScreen(-1); return; }
@@ -1021,15 +1064,25 @@
       if (a === 'next' || a === 'scroll-down') nextPage();
       else if (a === 'prev' || a === 'scroll-up') prevPage();
     }
+    // user interaction stops the auto-scroll
+    document.addEventListener('touchstart', stopAutoScroll, { passive: true });
+    document.addEventListener('mousedown', stopAutoScroll);
+    document.addEventListener('wheel', stopAutoScroll, { passive: true });
+    document.addEventListener('visibilitychange', function() {
+      if (document.visibilityState !== 'visible') stopAutoScroll();
+    });
     function updateWatchUI() {
       var form = document.getElementById('watch-pair');
       var pairBtn = document.getElementById('watch-pair-btn');
       var unpairBtn = document.getElementById('watch-unpair-btn');
       var connected = !!(watchWs && watchWs.readyState === WebSocket.OPEN);
       var stored = !!getWatchToken();
-      if (form) form.style.display = (!connected && !stored) ? 'block' : 'none';
       if (pairBtn) pairBtn.style.display = (!connected && !stored) ? '' : 'none';
       if (unpairBtn) unpairBtn.style.display = (connected || stored) ? '' : 'none';
+      // The pair form is revealed by the Pair button and starts hidden —
+      // never force it open (that made "Pair" look like it did nothing,
+      // or the opposite: click toggled it back off).
+      if (form && (connected || stored)) form.style.display = 'none';
       var input = document.getElementById('watch-token-input');
       if (input && stored && !input.value) input.value = getWatchToken();
     }
@@ -1041,7 +1094,7 @@
         watchWs = new WebSocket(scheme + '://' + window.location.host + '/ws/watch/' + encodeURIComponent(token) + '?role=reader');
       } catch (e) { setWatchStatus('Connection failed'); updateWatchUI(); return; }
       watchWs.onopen = function() { setWatchStatus('Watch connected'); showWatchIcon(true); updateWatchUI(); };
-      watchWs.onmessage = function(e) { try { var d = JSON.parse(e.data); if (d && d.action) routeWatchAction(d.action); } catch (err) {} };
+      watchWs.onmessage = function(e) { try { var d = JSON.parse(e.data); if (d && d.action) routeWatchAction(d.action, d.px); } catch (err) {} };
       watchWs.onclose = function() { watchWs = null; showWatchIcon(false); setWatchStatus('Watch disconnected'); updateWatchUI(); };
     }
     function pairWatch() {
@@ -1080,7 +1133,14 @@
     var watchPairBtn = document.getElementById('watch-pair-btn');
     if (watchPairBtn) watchPairBtn.onclick = function() {
       var f = document.getElementById('watch-pair');
-      if (f) f.style.display = f.style.display === 'none' ? 'block' : 'none';
+      if (f) {
+        var show = f.style.display === 'none' || !f.style.display;
+        f.style.display = show ? 'block' : 'none';
+        if (show) {
+          var inp = document.getElementById('watch-token-input');
+          if (inp) { try { inp.focus(); } catch (e) {} }
+        }
+      }
     };
     var watchConnectBtn = document.getElementById('watch-connect-btn');
     if (watchConnectBtn) watchConnectBtn.onclick = pairWatch;
