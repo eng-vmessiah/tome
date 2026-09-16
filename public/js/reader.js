@@ -1038,23 +1038,58 @@
 
     // Hands-free reading: watch-driven scrolls and page-turns are not touch
     // events, so Android never resets its screen-timeout on them and the
-    // screen dims mid-read. While a watch is paired and this page is visible,
-    // hold a Screen Wake Lock so the screen stays on. No-op where the API is
-    // unavailable (old browsers, insecure origins — needs https or localhost).
+    // screen dims mid-read. While a watch is paired and this page is visible:
+    //   1) prefer a Screen Wake Lock (https/localhost only — the API simply
+    //      does not exist on insecure origins like http:// LAN dev servers);
+    //   2) otherwise fall back to the classic muted-looping-video trick: the
+    //      browser reports ongoing media playback, so Android keeps the
+    //      screen on (NoSleep-style, ~0.6KB webm, no audio track).
     var wakeLock = null;
+    var keeperVideo = null;
+    var KEEPER_SRC = 'data:video/webm;base64,GkXfo59ChoEBQveBAULygQRC84EIQoKEd2VibUKHgQJChYECGFOAZwEAAAAAAAI/EU2bdLpNu4tTq4QVSalmU6yBoU27i1OrhBZUrmtTrIHYTbuMU6uEElTDZ1OsggEeTbuMU6uEHFO7a1OsggIp7AEAAAAAAABZAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAVSalmsirXsYMPQkBNgI1MYXZmNjAuMTYuMTAwV0GNTGF2ZjYwLjE2LjEwMESJiEB/QAAAAAAAFlSua8GuAQAAAAAAADjXgQFzxYjSWR5fTR8425yBACK1nIN1bmSIgQCGhVZfVlA4g4EBI+ODhAX14QDgibCBBLqBBJqBAhJUw2f8c3OgY8CAZ8iaRaOHRU5DT0RFUkSHjUxhdmY2MC4xNi4xMDBzc9ZjwItjxYjSWR5fTR8422fIoUWjh0VOQ09ERVJEh5RMYXZjNjAuMzEuMTAyIGxpYnZweGfIoUWjiERVUkFUSU9ORIeTMDA6MDA6MDAuNTAwMDAwMDAwAB9DtnVAhOeBAKOjgQAAgBACAJ0BKgQABAAARwiFhYiFhIgCAgAMDWAA/v+rUICjlYEAZACxAQADEGAAGAAYWC/0AAgAAKOVgQDIALEBAAMQNAAYABhYL/QACAAAo5WBASwAsQEAAxAsABgAGFgv9AAIAACjlYEBkACxAQADECQAGAAYWC/0AAgAABxTu2uRu4+zgQC3iveBAfGCAZ/wgQM=';
+    function startKeeperVideo() {
+      try {
+        if (!keeperVideo) {
+          var v = document.createElement('video');
+          v.muted = true;
+          v.loop = true;
+          v.setAttribute('muted', '');
+          v.setAttribute('loop', '');
+          v.setAttribute('playsinline', '');
+          v.setAttribute('data-screen-keeper', '1');
+          v.style.cssText = 'position:fixed;left:0;top:0;width:2px;height:2px;opacity:0.01;pointer-events:none;';
+          v.src = KEEPER_SRC;
+          document.body.appendChild(v);
+          keeperVideo = v;
+        }
+        var p = keeperVideo.play();
+        if (p && p.catch) p.catch(function() {});
+      } catch (e) {}
+    }
+    function stopKeeperVideo() {
+      if (!keeperVideo) return;
+      try { keeperVideo.pause(); } catch (e) {}
+    }
     function syncWakeLock() {
       var want = !!getWatchToken() && document.visibilityState === 'visible';
-      if (want && !wakeLock && navigator.wakeLock && navigator.wakeLock.request) {
+      var hasApi = !!(navigator.wakeLock && navigator.wakeLock.request);
+      if (want && !wakeLock && hasApi) {
         try {
           navigator.wakeLock.request('screen').then(function(lock) {
             if (!getWatchToken()) { try { lock.release(); } catch (e) {} return; } // unpaired while acquiring
             wakeLock = lock;
             lock.addEventListener('release', function() { wakeLock = null; });
-          }).catch(function() {});
-        } catch (e) {}
+          }).catch(function() { if (want) startKeeperVideo(); });
+        } catch (e) { startKeeperVideo(); }
       } else if (!want && wakeLock) {
         try { wakeLock.release(); } catch (e) {}
         wakeLock = null;
+      }
+      // Fallback bookkeeping (insecure origins / denied requests).
+      if (!hasApi) {
+        if (want) startKeeperVideo(); else stopKeeperVideo();
+      } else if (!want) {
+        stopKeeperVideo();
       }
     }
     // Auto-scroll ("scroll infinito"): continuous reading scroll, toggled by
